@@ -4,6 +4,12 @@ import { BaseSubscription, BaseUpdate } from '../types/interfaces';
 import { GrpcSubscriptionStatus } from '../types/enums';
 import { log } from '../../../utils/logger';
 
+interface GrpcError extends Error {
+    code?: number;
+    details?: string;
+    metadata?: any;
+}
+
 export abstract class GenericGrpcClient<
   TSubscription extends BaseSubscription | void,
   TUpdate extends BaseUpdate,
@@ -18,10 +24,39 @@ export abstract class GenericGrpcClient<
 
   constructor(
     protected endpoint: string,
-    protected auth: string
+    protected auth?: string
   ) {
     super();
-    this.client = new Client(endpoint, auth, undefined);
+    if (!auth) {
+      auth = undefined;
+    }
+
+    log.info('Creating gRPC client', {
+      module: 'GRPC',
+      clientType: this.constructor.name,
+      endpoint: endpoint.split('@')[0], // Hide credentials
+      hasAuth: !!auth
+    });
+
+    if (!endpoint || typeof endpoint !== 'string' || endpoint.trim() === '') {
+      throw new Error(`Invalid endpoint provided to ${this.constructor.name}`);
+    }
+
+    try {
+      this.client = new Client(endpoint, auth, undefined);
+
+      log.info('Using gRPC endpoint', {
+        module: 'GRPC',
+        clientType: this.constructor.name,
+        endpoint: endpoint.split('@')[0], // Hide credentials
+      });
+    } catch (error) {
+      log.error(`Failed to create ${this.constructor.name} client`, error, {
+        module: 'GRPC',
+        endpoint: endpoint.split('@')[0]
+      });
+      throw error;
+    }
   }
 
   protected abstract isRelevantUpdate(rawData: TRawData): boolean;
@@ -48,12 +83,24 @@ export abstract class GenericGrpcClient<
     if (this.isConnected) return;
 
     try {
+      log.info(`Connecting ${this.constructor.name}...`, {
+        module: 'GRPC',
+        clientType: this.constructor.name,
+        endpoint: this.endpoint.split('@')[0]
+      });
+
       this.stream = await this.client.subscribe();
       this.setupStreamHandlers();
       this.isConnected = true;
       this.emit('status', GrpcSubscriptionStatus.SUBSCRIBED);
+
+      log.info(`${this.constructor.name} connected successfully`, {
+        module: 'GRPC',
+        clientType: this.constructor.name
+      });
     } catch (error) {
-      this.emit('status', GrpcSubscriptionStatus.ERROR);
+      const grpcError = error as GrpcError;
+      this.handleError(grpcError);
       throw error;
     }
   }
@@ -103,16 +150,50 @@ export abstract class GenericGrpcClient<
     }
   }
 
-  protected handleError(error: Error): void {
-    log.error(`gRPC error in ${this.constructor.name}`, error, { module: 'GRPC' });
+  protected handleError(error: GrpcError): void {
+    const errorDetails = {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      metadata: error.metadata,
+      stack: error.stack,
+    };
+
+    log.error(`gRPC error in ${this.constructor.name}`, errorDetails, { 
+      module: 'GRPC',
+      clientType: this.constructor.name,
+      endpoint: this.endpoint.split('@')[0], // Log endpoint without credentials
+      connectionState: this.isConnected ? 'connected' : 'disconnected'
+    });
+
+    if (error.code === 14) { // UNAVAILABLE
+      log.error('gRPC service unavailable - Check if the server supports gRPC protocol', {
+        module: 'GRPC',
+        suggestion: 'Verify server configuration and gRPC port'
+      });
+    } else if (error.code === 16) { // UNAUTHENTICATED
+      log.error('gRPC authentication failed', {
+        module: 'GRPC',
+        suggestion: 'Check authentication credentials'
+      });
+    }
+
     this.emit('status', GrpcSubscriptionStatus.ERROR);
     this.handleDisconnect();
   }
 
   protected handleDisconnect(): void {
+    if (this.isConnected) {
+      log.warn(`${this.constructor.name} disconnected, attempting reconnection in 5 seconds`, {
+        module: 'GRPC',
+        clientType: this.constructor.name
+      });
+    }
     this.isConnected = false;
     this.emit('status', GrpcSubscriptionStatus.DISCONNECTED);
-    setTimeout(() => this.connect(), 1000);
+    
+    setTimeout(() => this.connect(), 5000);
   }
 
   public abstract initializeGlobalSubscription(): Promise<void>;

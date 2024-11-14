@@ -122,13 +122,22 @@ export const log = {
     },
     
     error: (msg: string, error?: Error | unknown, context?: LogContext) => {
+        const errorObj = error instanceof Error ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack
+        } : error;
+
+        // Handle cases where error is a plain object
+        const formattedError = typeof errorObj === 'object' ? 
+            JSON.stringify(errorObj, null, 2) : 
+            String(errorObj);
+
         const errorContext = {
             ...context,
-            error: error instanceof Error ? {
-                message: error.message,
-                stack: error.stack
-            } : error
+            error: formattedError
         };
+
         const formattedContext = formatContext(errorContext);
         logger.error(`❌ ${msg} ${formattedContext}`);
     },

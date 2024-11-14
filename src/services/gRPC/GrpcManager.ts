@@ -11,8 +11,14 @@ export class GrpcManager {
 
   private constructor(
     private endpoint: string,
-    private auth: string,
-  ) {}
+    private auth?: string,
+  ) {
+    log.info('Constructing GrpcManager', {
+      module: 'GRPC',
+      rawEndpoint: endpoint,
+      hasAuth: !!auth
+    });
+  }
 
   public static getInstance(): GrpcManager {
     if (!GrpcManager.instance) {
@@ -26,23 +32,42 @@ export class GrpcManager {
         ? process.env.GRPC_AUTH_PROD
         : process.env.GRPC_AUTH_DEV;
 
-      if (!endpoint || !auth) {
-        throw new Error(`GRPC_ENDPOINT_${isProd ? 'PROD' : 'DEV'} and GRPC_AUTH_${isProd ? 'PROD' : 'DEV'} must be configured`);
-      }
-
-      log.info('Initializing gRPC Manager', {
+      // Debug log environment variables
+      log.info('Environment configuration', {
         module: 'GRPC',
         environment: isProd ? 'production' : 'development',
-        endpoint: endpoint.split('@')[0] // Log endpoint without credentials
+        hasEndpoint: !!endpoint,
+        hasAuth: !!auth,
+        nodeEnv: process.env.NODE_ENV,
+        endpointType: endpoint?.startsWith('http') ? 'HTTP(S)' : 'Raw gRPC'
       });
 
-      GrpcManager.instance = new GrpcManager(endpoint, auth);
+      if (!endpoint) {
+        throw new Error(
+          `Missing environment variable: GRPC_ENDPOINT_${isProd ? 'PROD' : 'DEV'}`
+        );
+      }
+
+      try {
+        GrpcManager.instance = new GrpcManager(endpoint, auth);
+      } catch (error) {
+        log.error('Failed to create GrpcManager instance', error, {
+          module: 'GRPC',
+          environment: isProd ? 'production' : 'development'
+        });
+        throw error;
+      }
     }
     return GrpcManager.instance;
   }
 
   public async initialize(): Promise<void> {
     try {
+      log.info('Initializing gRPC clients', { 
+        module: 'GRPC',
+        endpoint: this.endpoint
+      });
+
       // Initialize Orca Whirlpool client
       const orcaClient = new OrcaWhirlpoolClient(this.endpoint, this.auth);
       await orcaClient.initializeGlobalSubscription();
@@ -58,9 +83,15 @@ export class GrpcManager {
       await blockMetaClient.initializeGlobalSubscription();
       this.clients.set(GrpcClientType.BLOCK_META, blockMetaClient);
 
-      log.info('All gRPC clients initialized successfully', { module: 'GRPC' });
+      log.info('All gRPC clients initialized successfully', { 
+        module: 'GRPC',
+        activeClients: Array.from(this.clients.keys())
+      });
     } catch (error) {
-      log.error('Failed to initialize gRPC clients', error, { module: 'GRPC' });
+      log.error('Failed to initialize gRPC clients', error, { 
+        module: 'GRPC',
+        endpoint: this.endpoint
+      });
       throw error;
     }
   }

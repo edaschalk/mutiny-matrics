@@ -49,12 +49,9 @@ export class GrpcMonitor {
             this.metrics.recordBlockMeta(update);
         });
 
-        // Monitor Orca pool updates
-        const poolsToMonitor = process.env.ORCA_POOLS_TO_MONITOR?.split(',') || [];
-        poolsToMonitor.forEach(poolAddress => {
-            this.orcaClient!.subscribe((update: OrcaWhirlpoolUpdate) => {
-                this.metrics.recordAccountUpdate(update);
-            });
+        // Monitor alle Orca pool updates
+        this.orcaClient.subscribe( (update: OrcaWhirlpoolUpdate) => {
+            this.metrics.recordAccountUpdate(update);
         });
     }
 
