@@ -55,7 +55,7 @@ export class BlockMetaClient extends GenericGrpcClient<
         rewards: blockMeta.rewards.rewards || [],
         confirmationTime: Date.now()
       };
-
+      log.info('Block meta update', { update });
       return update;
     } catch (error) {
       log.error('Error parsing block meta update', error, { module: 'BLOCK_META' });
