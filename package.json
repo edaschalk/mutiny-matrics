@@ -1,0 +1,35 @@
+{
+  "name": "mutiny-matrics",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "ts-node src/index.ts",
+    "build": "tsc",
+    "dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/index.ts",
+    "prod": "NODE_ENV=production ts-node src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Service monitoring tool for Triton gRPC and Solana services",
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/pino": "^7.0.5",
+    "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.29.0",
+    "@grpc/grpc-js": "^1.9.13",
+    "@orca-so/whirlpools-sdk": "^0.11.8",
+    "@solana/web3.js": "^1.90.0",
+    "@triton-one/yellowstone-grpc": "^0.4.0",
+    "bs58": "^5.0.0",
+    "dotenv": "^16.3.1",
+    "node-fetch": "^3.3.2",
+    "pino": "^8.21.0",
+    "pino-pretty": "^10.3.1"
+  }
+}
